@@ -6,11 +6,11 @@
 #include "SHA256.h"
 #include <atomic>
 
-std::atomic<uint32_t> max(0);
-std::atomic<uint32_t> max_nonce(0);
+std::atomic<uint64_t> max(0);
+std::atomic<uint64_t> max_nonce(0);
 
-std::atomic<uint32_t> base(0);
-std::atomic<uint32_t> size(1000000); // 1 million
+std::atomic<uint64_t> base(0);
+std::atomic<uint64_t> size(1000000); // 1 million
 std::atomic<bool> done(false);
 
 std::string msg("This is IN2029 formative task");
@@ -58,7 +58,7 @@ void task(int min_zeros, int thread_no)
         int local_best_zeros = 0;
         int local_best_nonce = 0;
 
-        for (uint32_t i = current_base; i <= current_base + size; i++)
+        for (uint64_t i = current_base; i <= current_base + size; i++)
         {
             // pair[0] zeros
             // pair[1] nonce
