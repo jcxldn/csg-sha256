@@ -15,7 +15,7 @@ std::atomic<bool> done(false);
 
 std::string msg("This is IN2029 formative task");
 
-std::pair<int, int> test(int nonce)
+std::pair<int, uint64_t> test(int nonce)
 {
     SHA256 sha;
 
@@ -40,7 +40,7 @@ std::pair<int, int> test(int nonce)
     }
     // printf("HASH: %d (%s)\n", zeros, hash.c_str());
 
-    return std::pair<int, int>(zeros, nonce);
+    return std::pair<int, uint64_t>(zeros, nonce);
 }
 
 void task(int min_zeros, int thread_no)
@@ -62,7 +62,7 @@ void task(int min_zeros, int thread_no)
         {
             // pair[0] zeros
             // pair[1] nonce
-            std::pair<int, int> res = test(i);
+            std::pair<int, uint64_t> res = test(i);
             if (res.first > max)
             {
                 max = res.first;
@@ -83,7 +83,9 @@ void dbg_task(int min_zeros)
         fprintf(stderr, "Nonce base: %d, Curr: %d (%d), Goal: %d\n", base.load(), max.load(), max_nonce.load(), min_zeros);
     }
 
-    fprintf(stderr, "Final nonce %d with %d digits of leading zeros. Goodbye!\n", base.load(), min_zeros);
+    std::string message(msg);
+    message.append(std::to_string(base.load()));
+    fprintf(stderr, "Final message '%s' using nonce %d with %d digits of leading zeros. Goodbye!\n", message.c_str(), base.load(), min_zeros);
     return;
 }
 
