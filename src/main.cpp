@@ -1,32 +1,26 @@
 #include <iostream>
 #include <thread>
 #include <vector>
-#include <mutex>
 #include <cstdlib>
 
 #include "SHA256.h"
+#include <atomic>
 
-std::mutex output_mutex;
-std::mutex nonce_mutex;
-std::mutex max_mutex;
+std::atomic<uint32_t> max(0);
+std::atomic<uint32_t> max_nonce(0);
 
-uint32_t nonce = 0;
-uint32_t max = 0;
-uint32_t max_nonce = 0;
+std::atomic<uint32_t> base(0);
+std::atomic<uint32_t> size(300000); // 200_000
+std::atomic<bool> done(false);
 
 std::string msg("This is IN2029 formative task");
 
-std::pair<int, int> test()
+std::pair<int, int> test(int nonce)
 {
-    nonce_mutex.lock();
-    int current_nonce = nonce;
-    nonce++;
-    nonce_mutex.unlock();
-
     SHA256 sha;
 
     std::string message(msg);
-    message.append(std::to_string(current_nonce));
+    message.append(std::to_string(nonce));
     sha.update(message);
 
     std::string hash = SHA256::toString(sha.digest());
@@ -44,31 +38,39 @@ std::pair<int, int> test()
             break;
         }
     }
-
     // printf("HASH: %d (%s)\n", zeros, hash.c_str());
 
-    return std::pair<int, int>(zeros, current_nonce);
+    return std::pair<int, int>(zeros, nonce);
 }
 
-void task(int min_zeros, int i)
+void task(int min_zeros, int thread_no)
 {
-    output_mutex.lock();
-    std::wcout << "Thread " << i << " started.\n";
-    output_mutex.unlock();
+    // std::wcout << "Thread " << thread_no << " started.\n";
 
-    while (max < min_zeros)
+    while (!done.load())
     {
 
-        // pair[0] zeros
-        // pair[1] nonce
-        std::pair<int, int> res = test();
-        if (res.first > max)
+        int current_base = base;
+        base.fetch_add(size.load());
+
+        // std::wcout << "BASE: " << base.load() << "\n";
+
+        int local_best_zeros = 0;
+        int local_best_nonce = 0;
+
+        for (uint32_t i = current_base; i <= current_base + size; i++)
         {
-            max_mutex.lock();
-            max = res.first;
-            max_nonce = res.second;
-            printf("[new]: (zeros, nonce) (%d, %d)\n", res.first, res.second);
-            max_mutex.unlock();
+            // pair[0] zeros
+            // pair[1] nonce
+            std::pair<int, int> res = test(i);
+            if (res.first > max)
+            {
+                max = res.first;
+                max_nonce = res.second;
+                // printf("[new]: (zeros, nonce) (%d, %d)\n", res.first, res.second);
+                fprintf(stderr, "Thread %i found new nonce %d with %d zeros.\n", thread_no, res.second, res.first);
+                done = max >= min_zeros;
+            }
         }
     }
 }
@@ -77,23 +79,11 @@ void dbg_task(int min_zeros)
 {
     while (max < min_zeros)
     {
-
         std::this_thread::sleep_for(std::chrono::seconds(1));
-
-        nonce_mutex.lock();
-        max_mutex.lock();
-        printf("Nonce: %d, Curr: %d (%d), Goal: %d\n", nonce, max, max_nonce, min_zeros);
-        nonce_mutex.unlock();
-        max_mutex.unlock();
+        fprintf(stderr, "Nonce base: %d, Curr: %d (%d), Goal: %d\n", base.load(), max.load(), max_nonce.load(), min_zeros);
     }
 
-    std::wcout << "Done\n";
-
-    nonce_mutex.lock();
-    max_mutex.lock();
-    printf("Nonce: %d, Curr: %d (%d), Goal: %d\n", nonce, max, max_nonce, min_zeros);
-    nonce_mutex.unlock();
-    max_mutex.unlock();
+    fprintf(stderr, "Final nonce %d with %d digits of leading zeros. Goodbye!\n", base.load(), min_zeros);
     return;
 }
 
