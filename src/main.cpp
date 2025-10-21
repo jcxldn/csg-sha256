@@ -10,7 +10,7 @@ std::atomic<uint32_t> max(0);
 std::atomic<uint32_t> max_nonce(0);
 
 std::atomic<uint32_t> base(0);
-std::atomic<uint32_t> size(300000); // 200_000
+std::atomic<uint32_t> size(1000000); // 1 million
 std::atomic<bool> done(false);
 
 std::string msg("This is IN2029 formative task");
