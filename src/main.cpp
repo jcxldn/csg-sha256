@@ -6,6 +6,8 @@
 #include "SHA256.h"
 #include <atomic>
 
+#include <inttypes.h>
+
 std::atomic<uint64_t> max(0);
 std::atomic<uint64_t> max_nonce(0);
 
@@ -68,7 +70,7 @@ void task(int min_zeros, int thread_no)
                 max = res.first;
                 max_nonce = res.second;
                 // printf("[new]: (zeros, nonce) (%d, %d)\n", res.first, res.second);
-                fprintf(stderr, "Thread %i found new nonce %d with %d zeros.\n", thread_no, res.second, res.first);
+                fprintf(stderr, "Thread %i found new nonce %" PRIu64 " with %d zeros.\n", thread_no, res.second, res.first);
                 done = max >= min_zeros;
             }
         }
@@ -80,19 +82,14 @@ void dbg_task(int min_zeros)
     while (max < min_zeros)
     {
         std::this_thread::sleep_for(std::chrono::seconds(1));
-        fprintf(stderr, "Nonce base: %d, Curr: %d (%d), Goal: %d\n", base.load(), max.load(), max_nonce.load(), min_zeros);
+        fprintf(stderr, "Nonce base: %" PRIu64 ", Curr: %" PRIu64 " (%" PRIu64 "), Goal: %d\n", base.load(), max.load(), max_nonce.load(), min_zeros);
     }
 
-    std::string message(msg);
-    message.append(std::to_string(base.load()));
-    fprintf(stderr, "Final message '%s' using nonce %d with %d digits of leading zeros. Goodbye!\n", message.c_str(), base.load(), min_zeros);
     return;
 }
 
 int main(int argc, char **argv)
 {
-    SHA256 sha;
-
     int num_threads = argc >= 1 ? atoi(argv[1]) : 1;
     int min_zeros = argc >= 2 ? atoi(argv[2]) : 1;
 
@@ -113,6 +110,17 @@ int main(int argc, char **argv)
     {
         threads.at(i).join();
     }
+
+    std::string message(msg);
+    message.append(std::to_string(max_nonce.load()));
+
+    // get final hash
+
+    SHA256 sha;
+    sha.update(message);
+    std::string hash = SHA256::toString(sha.digest());
+
+    fprintf(stderr, "Final message '%s' ('%s') using nonce %" PRIu64 " with %" PRIu64 " digits of leading zeros. Goodbye!\n", message.c_str(), hash.c_str(), max_nonce.load(), max.load());
 
     // sha.update("This is IN2029 formative task");
     // cout << SHA256::toString(sha.digest()) << endl;
