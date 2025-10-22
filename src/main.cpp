@@ -43,44 +43,50 @@ bool does_output_exist()
     return (stat(filename_results.c_str(), &buffer) == 0);
 }
 
+uint64_t handle_base()
+{
+    uint64_t base;
+    if (does_base_exist())
+    {
+
+        std::ifstream base_file(filename_base.c_str());
+
+        std::string line;
+        std::string contents;
+        while (std::getline(base_file, line))
+        {
+            // processing
+
+            contents += line;
+        }
+
+        // atoi but uint64_t
+        base = atoll(contents.c_str());
+    }
+    else
+    {
+        base = starting_base.load();
+    }
+
+    // append base
+    uint64_t next_base = base + size.load();
+
+    // write new file
+    std::ofstream output;
+    output.open(filename_base.c_str(), std::ios::out);
+    output << std::to_string(next_base) << std::endl;
+    output.close();
+
+    return base;
+}
+
 uint64_t get_base()
 {
-
-    uint64_t base;
 
     auto lock = file_lock::FileLockFactory::CreateLockContext(filename_base);
     if (lock)
     {
-        if (does_base_exist())
-        {
-
-            std::ifstream base_file(filename_base.c_str());
-
-            std::string line;
-            std::string contents;
-            while (std::getline(base_file, line))
-            {
-                // processing
-
-                contents += line;
-            }
-
-            // atoi but uint64_t
-            base = atoll(contents.c_str());
-        }
-        else
-        {
-            base = starting_base.load();
-        }
-
-        // append base
-        uint64_t next_base = base + size.load();
-
-        // write new file
-        std::ofstream output;
-        output.open(filename_base.c_str(), std::ios::out);
-        output << std::to_string(next_base) << std::endl;
-        output.close();
+        return handle_base();
     }
     else
     {
@@ -89,9 +95,29 @@ uint64_t get_base()
             // wait for lock
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
+        return handle_base();
+    }
+}
+
+void handle_log(int machine_id, int thread_id, int zeros, uint64_t nonce, std::string message, std::string hash)
+{
+    // open results file
+    bool did_exist = does_output_exist();
+
+    std::ofstream output_file;
+    output_file.open(filename_results.c_str(), std::ios::out | std::ios::app);
+    // check if output exists
+    if (!did_exist)
+    {
+        output_file << "epoch,machine_id,thread_id,zeros,nonce,hash,message" << std::endl;
     }
 
-    return base;
+    std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+
+    output_file << ms.count() << "," << machine_id << "," << thread_id << "," << zeros << "," << nonce << "," << hash << "," << message << std::endl;
+
+    // tidy up
+    output_file.close();
 }
 
 void log(int machine_id, int thread_id, int zeros, uint64_t nonce)
@@ -107,24 +133,7 @@ void log(int machine_id, int thread_id, int zeros, uint64_t nonce)
     auto lock = file_lock::FileLockFactory::CreateLockContext(filename_base);
     if (lock)
     {
-
-        // open results file
-        bool did_exist = does_output_exist();
-
-        std::ofstream output_file;
-        output_file.open(filename_results.c_str(), std::ios::out | std::ios::app);
-        // check if output exists
-        if (!did_exist)
-        {
-            output_file << "epoch,machine_id,thread_id,zeros,nonce,hash,message" << std::endl;
-        }
-
-        std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-
-        output_file << ms.count() << "," << machine_id << "," << thread_id << "," << zeros << "," << nonce << "," << hash << "," << message << std::endl;
-
-        // tidy up
-        output_file.close();
+        handle_log(machine_id, thread_id, zeros, nonce, message, hash);
     }
     else
     {
@@ -133,6 +142,7 @@ void log(int machine_id, int thread_id, int zeros, uint64_t nonce)
             // wait for lock
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
+        handle_log(machine_id, thread_id, zeros, nonce, message, hash);
     }
 }
 
