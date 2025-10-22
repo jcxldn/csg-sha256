@@ -22,6 +22,9 @@ std::atomic<uint64_t> starting_base(0);
 std::atomic<uint64_t> size(1000000); // 1 million
 std::atomic<bool> done(false);
 
+std::atomic<bool> local_base_lock(false);
+std::atomic<bool> local_output_lock(false);
+
 std::atomic<uint64_t> last_local_base(0);
 
 std::string msg("This is IN2029 formative task");
@@ -43,6 +46,7 @@ bool does_output_exist()
 
 uint64_t handle_base()
 {
+    local_base_lock = true;
     uint64_t base;
     if (does_base_exist())
     {
@@ -75,6 +79,7 @@ uint64_t handle_base()
     output << std::to_string(next_base) << std::endl;
     output.close();
 
+    local_base_lock = false;
     return base;
 }
 
@@ -82,13 +87,13 @@ uint64_t get_base()
 {
 
     auto lock = file_lock::FileLockFactory::CreateLockContext(filename_base);
-    if (lock)
+    if (lock && !local_base_lock)
     {
         return handle_base();
     }
     else
     {
-        while (!lock)
+        while (!lock || local_base_lock)
         {
             // wait for lock
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -99,6 +104,7 @@ uint64_t get_base()
 
 void handle_log(int machine_id, int thread_id, int zeros, uint64_t nonce, std::string message, std::string hash)
 {
+    local_output_lock = true;
     // open results file
     bool did_exist = does_output_exist();
 
@@ -115,6 +121,7 @@ void handle_log(int machine_id, int thread_id, int zeros, uint64_t nonce, std::s
     output_file << ms.count() << "," << machine_id << "," << thread_id << "," << zeros << "," << nonce << "," << hash << "," << message << std::endl;
 
     // tidy up
+    local_output_lock = false;
     output_file.close();
 }
 
@@ -129,13 +136,13 @@ void log(int machine_id, int thread_id, int zeros, uint64_t nonce)
     std::string hash = SHA256::toString(sha.digest());
 
     auto lock = file_lock::FileLockFactory::CreateLockContext(filename_base);
-    if (lock)
+    if (lock && !local_output_lock)
     {
         handle_log(machine_id, thread_id, zeros, nonce, message, hash);
     }
     else
     {
-        while (!lock)
+        while (!lock || local_output_lock)
         {
             // wait for lock
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
