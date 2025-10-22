@@ -45,7 +45,10 @@ bool does_output_exist()
 
 uint64_t handle_base(file_lock::FileLockContext *lock)
 {
-    local_base_lock = true;
+    // Memory operations after this cannot be reordered before it
+    // see: https://codersblock.org/posts/ditching-the-mutex/
+    local_base_lock.store(true, std::memory_order_relaxed);
+
     uint64_t base;
     if (does_base_exist())
     {
@@ -78,7 +81,8 @@ uint64_t handle_base(file_lock::FileLockContext *lock)
     output << std::to_string(next_base) << std::endl;
     output.close();
 
-    local_base_lock = false;
+    // Memory operations before this cannot be reordered past it
+    local_base_lock.store(false, std::memory_order_release);
 
     delete lock;
     return base;
@@ -105,7 +109,9 @@ uint64_t get_base()
 
 void handle_log(int machine_id, int thread_id, int zeros, uint64_t nonce, std::string message, std::string hash, file_lock::FileLockContext *lock)
 {
-    local_output_lock = true;
+    // Memory operations after this cannot be reordered before it
+    local_output_lock.store(true, std::memory_order_relaxed);
+
     // open results file
     bool did_exist = does_output_exist();
 
@@ -122,7 +128,9 @@ void handle_log(int machine_id, int thread_id, int zeros, uint64_t nonce, std::s
     output_file << ms.count() << "," << machine_id << "," << thread_id << "," << zeros << "," << nonce << "," << hash << "," << message << std::endl;
 
     // tidy up
-    local_output_lock = false;
+
+    // Memory operations before this cannot be reordered past it
+    local_output_lock.store(false, std::memory_order_release);
     output_file.close();
 
     delete lock;
