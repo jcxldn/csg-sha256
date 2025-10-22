@@ -7,7 +7,6 @@
 #include <cstdlib>
 #include <chrono>
 
-#include "FileLockFactory.hpp"
 #include "SHA256.h"
 
 #include <inttypes.h>
@@ -44,7 +43,7 @@ bool does_output_exist()
     return (stat(filename_results.c_str(), &buffer) == 0);
 }
 
-uint64_t handle_base()
+uint64_t handle_base(file_lock::FileLockContext *lock)
 {
     local_base_lock = true;
     uint64_t base;
@@ -80,16 +79,18 @@ uint64_t handle_base()
     output.close();
 
     local_base_lock = false;
+
+    delete lock;
     return base;
 }
 
 uint64_t get_base()
 {
 
-    auto lock = file_lock::FileLockFactory::CreateLockContext(filename_base);
+    std::unique_ptr<file_lock::FileLockContext> lock = file_lock::FileLockFactory::CreateLockContext(filename_base);
     if (lock && !local_base_lock)
     {
-        return handle_base();
+        return handle_base(lock.release());
     }
     else
     {
@@ -98,11 +99,11 @@ uint64_t get_base()
             // wait for lock
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
-        return handle_base();
+        return handle_base(lock.release());
     }
 }
 
-void handle_log(int machine_id, int thread_id, int zeros, uint64_t nonce, std::string message, std::string hash)
+void handle_log(int machine_id, int thread_id, int zeros, uint64_t nonce, std::string message, std::string hash, file_lock::FileLockContext *lock)
 {
     local_output_lock = true;
     // open results file
@@ -123,6 +124,8 @@ void handle_log(int machine_id, int thread_id, int zeros, uint64_t nonce, std::s
     // tidy up
     local_output_lock = false;
     output_file.close();
+
+    delete lock;
 }
 
 void log(int machine_id, int thread_id, int zeros, uint64_t nonce)
@@ -138,7 +141,7 @@ void log(int machine_id, int thread_id, int zeros, uint64_t nonce)
     auto lock = file_lock::FileLockFactory::CreateLockContext(filename_base);
     if (lock && !local_output_lock)
     {
-        handle_log(machine_id, thread_id, zeros, nonce, message, hash);
+        handle_log(machine_id, thread_id, zeros, nonce, message, hash, lock.release());
     }
     else
     {
@@ -147,7 +150,7 @@ void log(int machine_id, int thread_id, int zeros, uint64_t nonce)
             // wait for lock
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
-        handle_log(machine_id, thread_id, zeros, nonce, message, hash);
+        handle_log(machine_id, thread_id, zeros, nonce, message, hash, lock.release());
     }
 }
 
