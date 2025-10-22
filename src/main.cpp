@@ -21,8 +21,6 @@ std::atomic<uint64_t> max_nonce(0);
 std::atomic<uint64_t> starting_base(0);
 std::atomic<uint64_t> size(1000000); // 1 million
 std::atomic<bool> done(false);
-std::atomic<bool> local_base_lock(false);
-std::atomic<bool> local_output_lock(false);
 
 std::atomic<uint64_t> last_local_base(0);
 
@@ -208,12 +206,12 @@ void task(int min_zeros, int machine_id, int thread_no)
     }
 }
 
-void dbg_task(int min_zeros)
+void dbg_task(int min_zeros, int machine_id)
 {
     while (max < min_zeros)
     {
         std::this_thread::sleep_for(std::chrono::seconds(1));
-        fprintf(stderr, "Local nonce base: %" PRIu64 ", Curr: %i (%" PRIu64 "), Goal: %d\n", last_local_base.load(), max.load(), max_nonce.load(), min_zeros);
+        fprintf(stderr, "[#%d] Local nonce base: %" PRIu64 ", Curr: %i (%" PRIu64 "), Goal: %d\n", machine_id, last_local_base.load(), max.load(), max_nonce.load(), min_zeros);
     }
 
     return;
@@ -235,7 +233,7 @@ int main(int argc, char **argv)
     }
 
     // start debug thread
-    std::thread dbg = std::thread(dbg_task, min_zeros);
+    std::thread dbg = std::thread(dbg_task, min_zeros, machine_id);
     dbg.join();
 
     for (int i = 0; i < num_threads; i++)

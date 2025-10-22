@@ -16,6 +16,6 @@ std::pair<int, uint64_t> test(uint64_t nonce);
 
 void task(int min_zeros, int machine_id, int thread_no);
 
-void dbg_task(int min_zeros);
+void dbg_task(int min_zeros, int machine_id);
 
 #endif /* MAIN_HPP_ */
