@@ -27,12 +27,13 @@ add_library(file_lock_lib INTERFACE)
 target_include_directories(file_lock_lib INTERFACE ${file_lock_SOURCE_DIR}/include)
 
 
+find_package(MPI REQUIRED)
 
 add_executable(runner
     src/main.cpp
 )
 #target_include_directories(sha256-example PUBLIC "${PROJECT_SOURCE_DIR}/include")
-target_link_libraries(runner sha256 file_lock_lib -pthread)
+target_link_libraries(runner MPI::MPI_CXX sha256 file_lock_lib -pthread)
 
 target_compile_options(runner PRIVATE
   -Wall -Wextra -Wpedantic -Wstrict-aliasing

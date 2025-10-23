@@ -12,6 +12,8 @@
 #include <inttypes.h>
 #include <sys/stat.h>
 
+#include <mpi.h>
+
 #include "main.hpp"
 
 std::atomic<int> max(0); // max zeros
@@ -21,15 +23,14 @@ std::atomic<uint64_t> starting_base(0);
 std::atomic<uint64_t> size(1000000); // 1 million
 std::atomic<bool> done(false);
 
-std::atomic<bool> local_base_lock(false);
-std::atomic<bool> local_output_lock(false);
-
 std::atomic<uint64_t> last_local_base(0);
 
 std::string msg("This is IN2029 formative task");
 
 std::string filename_results("output.csv");
 std::string filename_base("base.txt");
+
+MPI_Win win_base, win_log;
 
 bool does_base_exist()
 {
@@ -43,11 +44,10 @@ bool does_output_exist()
     return (stat(filename_results.c_str(), &buffer) == 0);
 }
 
-uint64_t handle_base(file_lock::FileLockContext *lock)
+uint64_t get_base()
 {
-    // Memory operations after this cannot be reordered before it
-    // see: https://codersblock.org/posts/ditching-the-mutex/
-    local_base_lock.store(true, std::memory_order_relaxed);
+
+    MPI_Win_lock(MPI_LOCK_SHARED, 1, 0, win_base);
 
     uint64_t base;
     if (does_base_exist())
@@ -81,62 +81,11 @@ uint64_t handle_base(file_lock::FileLockContext *lock)
     output << std::to_string(next_base) << std::endl;
     output.close();
 
-    // Memory operations before this cannot be reordered past it
-    local_base_lock.store(false, std::memory_order_release);
+    MPI_Win_unlock(1, win_base);
 
-    delete lock;
     return base;
 }
-
-uint64_t get_base()
-{
-
-    std::unique_ptr<file_lock::FileLockContext> lock = file_lock::FileLockFactory::CreateLockContext(filename_base);
-    if (lock && !local_base_lock)
-    {
-        return handle_base(lock.release());
-    }
-    else
-    {
-        while (!lock || local_base_lock)
-        {
-            // wait for lock
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-        return handle_base(lock.release());
-    }
-}
-
-void handle_log(int machine_id, int thread_id, int zeros, uint64_t nonce, std::string message, std::string hash, file_lock::FileLockContext *lock)
-{
-    // Memory operations after this cannot be reordered before it
-    local_output_lock.store(true, std::memory_order_relaxed);
-
-    // open results file
-    bool did_exist = does_output_exist();
-
-    std::ofstream output_file;
-    output_file.open(filename_results.c_str(), std::ios::out | std::ios::app);
-    // check if output exists
-    if (!did_exist)
-    {
-        output_file << "epoch,machine_id,thread_id,zeros,nonce,hash,message" << std::endl;
-    }
-
-    std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
-
-    output_file << ms.count() << "," << machine_id << "," << thread_id << "," << zeros << "," << nonce << "," << hash << "," << message << std::endl;
-
-    // tidy up
-
-    // Memory operations before this cannot be reordered past it
-    local_output_lock.store(false, std::memory_order_release);
-    output_file.close();
-
-    delete lock;
-}
-
-void log(int machine_id, int thread_id, int zeros, uint64_t nonce)
+void log(int thread_id, int zeros, uint64_t nonce)
 {
     // operations that can be done pre-writing (ie calc message)
     // TODO make func instead of duping code 3x.
@@ -146,20 +95,31 @@ void log(int machine_id, int thread_id, int zeros, uint64_t nonce)
     sha.update(message);
     std::string hash = SHA256::toString(sha.digest());
 
-    auto lock = file_lock::FileLockFactory::CreateLockContext(filename_base);
-    if (lock && !local_output_lock)
+    // lock
+    MPI_Win_lock(MPI_LOCK_SHARED, 1, 0, win_log);
+
+    // open results file
+    bool did_exist = does_output_exist();
+
+    std::ofstream output_file;
+    output_file.open(filename_results.c_str(), std::ios::out | std::ios::app);
+    // check if output exists
+    if (!did_exist)
     {
-        handle_log(machine_id, thread_id, zeros, nonce, message, hash, lock.release());
+        output_file << "epoch,thread_id,zeros,nonce,hash,message" << std::endl;
     }
-    else
-    {
-        while (!lock || local_output_lock)
-        {
-            // wait for lock
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-        handle_log(machine_id, thread_id, zeros, nonce, message, hash, lock.release());
-    }
+
+    std::chrono::milliseconds ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch());
+
+    output_file << ms.count() << "," << thread_id << "," << zeros << "," << nonce << "," << hash << "," << message << std::endl;
+
+    // tidy up
+
+    // Memory operations before this cannot be reordered past it
+    local_output_lock.store(false, std::memory_order_release);
+    output_file.close();
+
+    MPI_Win_unlock(1, win_log);
 }
 
 std::pair<int, uint64_t> test(uint64_t nonce)
@@ -190,7 +150,7 @@ std::pair<int, uint64_t> test(uint64_t nonce)
     return std::pair<int, uint64_t>(zeros, nonce);
 }
 
-void task(int min_zeros, int machine_id, int thread_no)
+void task(int min_zeros, int thread_no)
 {
     // std::wcout << "Thread " << thread_no << " started.\n";
 
@@ -209,11 +169,8 @@ void task(int min_zeros, int machine_id, int thread_no)
             if (res.first >= max)
             {
                 // found higher or equal
-                log(machine_id, thread_no, res.first, res.second);
-            }
+                log(thread_no, res.first, res.second);
 
-            if (res.first > max)
-            {
                 max = res.first;
                 max_nonce = res.second;
                 // printf("[new]: (zeros, nonce) (%d, %d)\n", res.first, res.second);
@@ -237,27 +194,36 @@ void dbg_task(int min_zeros, int machine_id)
 
 int main(int argc, char **argv)
 {
-    int num_threads = argc >= 1 ? atoi(argv[1]) : 1;
-    int min_zeros = argc >= 2 ? atoi(argv[2]) : 1;
-    int machine_id = argc >= 3 ? atoi(argv[3]) : 0;
+    // Init OpenMPI
 
-    printf("%i threads, %i min zeros\n", num_threads, min_zeros);
+    MPI_Init(NULL, NULL);
+    int world_size; // number of processes
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+
+    int world_rank; // the rank of the process (aka uuid for process?)
+    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+
+    char processor_name[MPI_MAX_PROCESSOR_NAME]; // gets the name of the processor
+    int name_len;
+    MPI_Get_processor_name(processor_name, &name_len);
+
+    int min_zeros = argc >= 2 ? atoi(argv[1]) : 1;
+
+    printf("processor %s, %i min zeros\n", processor_name, min_zeros);
+
+    MPI_Win_create(NULL, 0, 1, MPI_INFO_NULL, MPI_COMM_WORLD, &win_base);
+    MPI_Win_create(NULL, 0, 1, MPI_INFO_NULL, MPI_COMM_WORLD, &win_log);
 
     std::vector<std::thread> threads;
 
-    for (int i = 0; i < num_threads; i++)
-    {
-        threads.push_back(std::thread(task, min_zeros, machine_id, i));
-    }
+    std::thread work_thread = std::thread(task, min_zeros, world_rank);
 
-    // start debug thread
-    std::thread dbg = std::thread(dbg_task, min_zeros, machine_id);
-    dbg.join();
+    std::thread dbg_thread = std::thread(dbg_task, min_zeros, world_rank);
 
-    for (int i = 0; i < num_threads; i++)
-    {
-        threads.at(i).join();
-    }
+    dbg_thread.join();
+    work_thread.join();
+
+    // target reached
 
     std::string message(msg);
     message.append(std::to_string(max_nonce.load()));
@@ -270,7 +236,7 @@ int main(int argc, char **argv)
 
     fprintf(stderr, "Final message '%s' ('%s') using nonce %" PRIu64 " with %i digits of leading zeros. Goodbye!\n", message.c_str(), hash.c_str(), max_nonce.load(), max.load());
 
-    // sha.update("This is IN2029 formative task");
-    // cout << SHA256::toString(sha.digest()) << endl;
+    MPI_Finalize(); // finish MPI environment
+
     return 0;
 }
