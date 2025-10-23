@@ -31,6 +31,7 @@ std::string filename_results("output.csv");
 std::string filename_base("base.txt");
 
 MPI_Win win_base, win_log;
+uint64_t base_buffer;
 
 bool does_base_exist()
 {
@@ -47,30 +48,9 @@ bool does_output_exist()
 uint64_t get_base()
 {
 
-    MPI_Win_lock(MPI_LOCK_SHARED, 1, 0, win_base);
-
     uint64_t base;
-    if (does_base_exist())
-    {
-
-        std::ifstream base_file(filename_base.c_str());
-
-        std::string line;
-        std::string contents;
-        while (std::getline(base_file, line))
-        {
-            // processing
-
-            contents += line;
-        }
-
-        // atoi but uint64_t
-        base = atoll(contents.c_str());
-    }
-    else
-    {
-        base = starting_base.load();
-    }
+    MPI_Get(&base, 1, MPI_UINT64_T, 0, 0, 1, MPI_UINT64_T, win_base);
+    MPI_Win_fence(0, win_base);
 
     // append base
     uint64_t next_base = base + size.load();
@@ -81,7 +61,8 @@ uint64_t get_base()
     output << std::to_string(next_base) << std::endl;
     output.close();
 
-    MPI_Win_unlock(1, win_base);
+    MPI_Put(&next_base, 1, MPI_UINT64_T, 0, 0, 1, MPI_UINT64_T, win_base);
+    MPI_Win_fence(0, win_base);
 
     return base;
 }
@@ -207,18 +188,31 @@ int main(int argc, char **argv)
 
     int min_zeros = argc >= 2 ? atoi(argv[1]) : 1;
 
-    printf("processor %s, %i min zeros\n", processor_name, min_zeros);
+    printf("processor %s, rank %i, %i min zeros\n", processor_name, world_rank, min_zeros);
 
-    MPI_Win_create(NULL, 0, 1, MPI_INFO_NULL, MPI_COMM_WORLD, &win_base);
+    // create base window
+    MPI_Win_create(&base_buffer, sizeof(uint64_t), sizeof(uint64_t), MPI_INFO_NULL, MPI_COMM_WORLD, &win_base);
+    MPI_Win_fence(0, win_base); // wait for completion
+    if (world_rank == 0)
+    {
+
+        uint64_t starting = 0;
+        MPI_Put(&starting, 1, MPI_UINT64_T, 0, 0, 1, MPI_UINT64_T, win_base);
+    }
+
+    // create log window
     MPI_Win_create(NULL, 0, 1, MPI_INFO_NULL, MPI_COMM_WORLD, &win_log);
 
     std::vector<std::thread> threads;
 
     std::thread work_thread = std::thread(task, min_zeros, world_rank);
 
-    std::thread dbg_thread = std::thread(dbg_task, min_zeros, world_rank);
+    if (world_rank == 0)
+    {
+        std::thread dbg_thread = std::thread(dbg_task, min_zeros, world_rank);
+        dbg_thread.join();
+    }
 
-    dbg_thread.join();
     work_thread.join();
 
     // target reached
@@ -233,6 +227,9 @@ int main(int argc, char **argv)
     std::string hash = SHA256::toString(sha.digest());
 
     fprintf(stderr, "Final message '%s' ('%s') using nonce %" PRIu64 " with %i digits of leading zeros. Goodbye!\n", message.c_str(), hash.c_str(), max_nonce.load(), max.load());
+
+    MPI_Win_free(&win_base);
+    MPI_Win_free(&win_log);
 
     MPI_Finalize(); // finish MPI environment
 
