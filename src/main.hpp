@@ -3,8 +3,6 @@
 
 #include <utility>
 
-#include "FileLockFactory.hpp"
-
 bool does_base_exist();
 bool does_output_exist();
 

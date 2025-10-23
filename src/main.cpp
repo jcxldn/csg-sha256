@@ -115,8 +115,6 @@ void log(int thread_id, int zeros, uint64_t nonce)
 
     // tidy up
 
-    // Memory operations before this cannot be reordered past it
-    local_output_lock.store(false, std::memory_order_release);
     output_file.close();
 
     MPI_Win_unlock(1, win_log);
