@@ -47,22 +47,21 @@ bool does_output_exist()
 
 uint64_t get_base()
 {
+    MPI_Win_lock(MPI_LOCK_EXCLUSIVE, 0, 0, win_base);
 
     uint64_t base;
     MPI_Get(&base, 1, MPI_UINT64_T, 0, 0, 1, MPI_UINT64_T, win_base);
-    MPI_Win_fence(0, win_base);
+
+    MPI_Win_flush(0, win_base);
 
     // append base
     uint64_t next_base = base + size.load();
 
-    // write new file
-    std::ofstream output;
-    output.open(filename_base.c_str(), std::ios::out);
-    output << std::to_string(next_base) << std::endl;
-    output.close();
-
     MPI_Put(&next_base, 1, MPI_UINT64_T, 0, 0, 1, MPI_UINT64_T, win_base);
-    MPI_Win_fence(0, win_base);
+
+    MPI_Win_flush(0, win_base);
+
+    MPI_Win_unlock(0, win_base);
 
     return base;
 }
