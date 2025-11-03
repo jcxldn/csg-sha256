@@ -18,6 +18,10 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(sha256)
 
+
+separate_arguments(SHA256_COMPILE_FLAGS_BASE UNIX_COMMAND "${CMAKE_CXX_FLAGS_RELEASE}")
+target_compile_options(sha256 PUBLIC ${SHA256_COMPILE_FLAGS_BASE} -march=native -fno-math-errno -fno-trapping-math -flto) # from release-optimized benchmark
+
 find_package(MPI REQUIRED)
 
 add_executable(runner
@@ -25,6 +29,7 @@ add_executable(runner
 )
 #target_include_directories(sha256-example PUBLIC "${PROJECT_SOURCE_DIR}/include")
 target_link_libraries(runner MPI::MPI_CXX sha256 -pthread)
+
 
 target_compile_options(runner PRIVATE
   -Wall -Wextra -Wpedantic -Wstrict-aliasing
