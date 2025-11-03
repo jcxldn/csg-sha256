@@ -2,6 +2,9 @@ set(RUNNER_SOURCE_FILES src/main.cpp)
 get_target_property(BENCHMARK_INCLUDES benchmark INCLUDE_DIRECTORIES)
 
 
+add_custom_target(benchmark_runner_all)
+
+
 macro(register_runner suffix flags )
     set(RUNNER_TARGET benchmark_runner_${suffix})
 
@@ -31,5 +34,8 @@ macro(register_runner suffix flags )
 
     target_link_libraries(${RUNNER_TARGET} PUBLIC ${RUNNER_TARGET}_flags PRIVATE sha256 ${RUNNER_TARGET}_benchmark)
     set_target_properties(${RUNNER_TARGET} PROPERTIES FOLDER "Benchmarking")
+
+
+    add_dependencies(benchmark_runner_all ${RUNNER_TARGET})
 
 endmacro()
