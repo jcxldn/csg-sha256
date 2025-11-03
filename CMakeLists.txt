@@ -9,8 +9,7 @@ set(USE_FOLDERS ON)  # Housekeeping for generators that support it
 
 set(CMAKE_AR "gcc-ar") # required for our HPC env
 
-separate_arguments(OPTIMIZED_COMPILE_FLAGS_BASE UNIX_COMMAND "${CMAKE_CXX_FLAGS_RELEASE}")
-set(OPTIMIZED_COMPILE_FLAGS "${OPTIMIZED_COMPILE_FLAGS_BASE} -march=native -fno-math-errno -fno-trapping-math -flto -ffat-lto-objects -fuse-linker-plugin")  # from release-optimized benchmark
+set(OPTIMIZED_COMPILE_FLAGS "${CMAKE_CXX_FLAGS_RELEASE} -march=native -fno-math-errno -fno-trapping-math -flto -ffat-lto-objects -fuse-linker-plugin")  # from release-optimized benchmark
 
 include(FetchContent)
 
