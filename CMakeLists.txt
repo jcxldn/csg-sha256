@@ -35,3 +35,5 @@ target_compile_options(runner PRIVATE
 )
 
 #-Wextra-semi
+
+add_subdirectory(benchmark)
