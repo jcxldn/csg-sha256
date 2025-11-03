@@ -24,7 +24,7 @@ register_runner(debug ${CMAKE_CXX_FLAGS_DEBUG})
 
 register_runner(release ${CMAKE_CXX_FLAGS_RELEASE})
 register_runner(release_native "${CMAKE_CXX_FLAGS_RELEASE} -march=native")
-register_runner(release_optimized "${CMAKE_CXX_FLAGS_RELEASE} -march=native -fno-math-errno -fno-trapping-math -flto")
+register_runner(release_optimized ${OPTIMIZED_COMPILE_FLAGS})
 
 register_runner(o2 "-DNDEBUG -O2")
 register_runner(os "-DNDEBUG -Os")
