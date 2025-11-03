@@ -19,25 +19,17 @@
 std::atomic<int> max(0); // max zeros
 std::atomic<uint64_t> max_nonce(0);
 
-std::atomic<uint64_t> starting_base(0);
 std::atomic<uint64_t> size(1000000); // 1 million
 std::atomic<bool> done(false);
 
-std::atomic<uint64_t> last_local_base(0);
+std::atomic<uint64_t> last_local_base(0); // used for outputting on processor #0
 
 std::string msg("This is IN2029 formative task");
 
 std::string filename_results("output.csv");
-std::string filename_base("base.txt");
 
 MPI_Win win_base, win_log;
 uint64_t base_buffer;
-
-bool does_base_exist()
-{
-    struct stat buffer;
-    return (stat(filename_base.c_str(), &buffer) == 0);
-}
 
 bool does_output_exist()
 {
@@ -186,18 +178,20 @@ int main(int argc, char **argv)
     MPI_Get_processor_name(processor_name, &name_len);
 
     int min_zeros = argc >= 2 ? atoi(argv[1]) : 1;
+    uint64_t starting = argc >= 3 ? std::stoul(argv[2]) : 0UL;
 
-    printf("processor %s, rank %i, %i min zeros\n", processor_name, world_rank, min_zeros);
+    printf("processor %s, rank %i, %i min zeros, %" PRIu64 " starting value\n", processor_name, world_rank, min_zeros, starting);
 
     // create base window
     MPI_Win_create(&base_buffer, sizeof(uint64_t), sizeof(uint64_t), MPI_INFO_NULL, MPI_COMM_WORLD, &win_base);
-    MPI_Win_fence(0, win_base); // wait for completion
+
     if (world_rank == 0)
     {
 
-        uint64_t starting = 0;
         MPI_Put(&starting, 1, MPI_UINT64_T, 0, 0, 1, MPI_UINT64_T, win_base);
     }
+
+    MPI_Win_fence(0, win_base); // wait for completion
 
     // create log window
     MPI_Win_create(NULL, 0, 1, MPI_INFO_NULL, MPI_COMM_WORLD, &win_log);
