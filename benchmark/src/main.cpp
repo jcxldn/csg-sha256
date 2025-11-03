@@ -47,5 +47,9 @@ static std::pair<int, uint64_t> test(uint64_t nonce)
 
 // Register the function as a benchmark
 BENCHMARK(BM_sha256)->Iterations(ITERATIONS);
+BENCHMARK(BM_sha256)->Iterations(ITERATIONS)->Threads(2);
+BENCHMARK(BM_sha256)->Iterations(ITERATIONS)->Threads(4);
+BENCHMARK(BM_sha256)->Iterations(ITERATIONS)->Threads(8);
+BENCHMARK(BM_sha256)->Iterations(ITERATIONS)->Threads(16);
 // Run the benchmark
 BENCHMARK_MAIN();
