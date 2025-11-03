@@ -2,8 +2,7 @@ cmake_minimum_required(VERSION 3.14...3.31 FATAL_ERROR) # FetchContent
 
 project(sha256_hash_challenge)
 
-# file lock lib, otherwise C++11
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(USE_FOLDERS ON)  # Housekeeping for generators that support it
