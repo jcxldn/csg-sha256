@@ -11,11 +11,19 @@ FetchContent_Declare(
 
 set(BENCHMARK_ENABLE_GTEST_TESTS OFF)
 set(BENCHMARK_ENABLE_ASSEMBLY_TESTS OFF) # disable ASM tests (requires specific GCC versions)
+
+set(CMAKE_FOLDER "Benchmarking/Dependencies")
 FetchContent_MakeAvailable(google_benchmark)
+unset(CMAKE_FOLDER)
+
+# Include macro definition
+include(register_runner.cmake)
 
 
-add_executable(benchmark_runner
-    src/main.cpp
-)
+register_runner(debug ${CMAKE_CXX_FLAGS_DEBUG})
 
-target_link_libraries(benchmark_runner benchmark::benchmark sha256)
+register_runner(release ${CMAKE_CXX_FLAGS_RELEASE})
+register_runner(release_native "${CMAKE_CXX_FLAGS_RELEASE} -march=native")
+
+register_runner(o2 "-DNDEBUG -O2")
+register_runner(os "-DNDEBUG -Os")

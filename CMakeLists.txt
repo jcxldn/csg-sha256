@@ -6,6 +6,8 @@ project(sha256_hash_challenge)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(USE_FOLDERS ON)  # Housekeeping for generators that support it
+
 include(FetchContent)
 
 FetchContent_Declare(
