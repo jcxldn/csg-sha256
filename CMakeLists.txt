@@ -9,7 +9,9 @@ set(USE_FOLDERS ON)  # Housekeeping for generators that support it
 
 set(CMAKE_AR "gcc-ar") # required for our HPC env
 
-set(OPTIMIZED_COMPILE_FLAGS "${CMAKE_CXX_FLAGS_RELEASE} -march=native -fno-math-errno -fno-trapping-math -flto -ffat-lto-objects -fuse-linker-plugin")  # from release-optimized benchmark
+
+separate_arguments(OPTIMIZED_COMPILE_FLAGS_BASE UNIX_COMMAND "${CMAKE_CXX_FLAGS_RELEASE}")
+set(OPTIMIZED_COMPILE_FLAGS "${OPTIMIZED_COMPILE_FLAGS_BASE} -march=native -fno-math-errno -fno-trapping-math -flto -ffat-lto-objects -fuse-linker-plugin")  # from release-optimized benchmark
 
 include(FetchContent)
 
@@ -22,8 +24,6 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(sha256)
 
-
-separate_arguments(SHA256_COMPILE_FLAGS_BASE UNIX_COMMAND "${CMAKE_CXX_FLAGS_RELEASE}")
 target_compile_options(sha256 PUBLIC ${OPTIMIZED_COMPILE_FLAGS})
 
 find_package(MPI REQUIRED)
