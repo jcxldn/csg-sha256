@@ -19,7 +19,6 @@
 std::atomic<int> max(0); // max zeros
 std::atomic<uint64_t> max_nonce(0);
 
-std::atomic<uint64_t> size(1000000); // 1 million
 std::atomic<bool> done(false);
 
 std::atomic<uint64_t> last_local_base(0); // used for outputting on processor #0
@@ -28,8 +27,9 @@ std::string msg("This is IN2029 formative task");
 
 std::string filename_results("output.csv");
 
-MPI_Win win_base, win_log;
+MPI_Win win_base, win_size, win_log;
 uint64_t base_buffer;
+int64_t size_buffer;
 
 bool does_output_exist()
 {
@@ -40,14 +40,21 @@ bool does_output_exist()
 uint64_t get_base()
 {
     MPI_Win_lock(MPI_LOCK_EXCLUSIVE, 0, 0, win_base);
+    MPI_Win_lock(MPI_LOCK_SHARED, 0, 0, win_size);
 
     uint64_t base;
     MPI_Get(&base, 1, MPI_UINT64_T, 0, 0, 1, MPI_UINT64_T, win_base);
 
+    int64_t size;
+    MPI_Get(&size, 1, MPI_INT64_T, 0, 0, 1, MPI_INT64_T, win_size);
+
+    MPI_Win_flush(0, win_size);
+    MPI_Win_unlock(0, win_size);
+
     MPI_Win_flush(0, win_base);
 
     // append base
-    uint64_t next_base = base + size.load();
+    uint64_t next_base = base + size;
 
     MPI_Put(&next_base, 1, MPI_UINT64_T, 0, 0, 1, MPI_UINT64_T, win_base);
 
@@ -120,7 +127,7 @@ std::pair<int, uint64_t> test(uint64_t nonce)
     return std::pair<int, uint64_t>(zeros, nonce);
 }
 
-void task(int min_zeros, int thread_no)
+void task(int min_zeros, int thread_no, int64_t size)
 {
     // std::wcout << "Thread " << thread_no << " started.\n";
 
@@ -129,6 +136,9 @@ void task(int min_zeros, int thread_no)
 
         uint64_t current_base = get_base();
         last_local_base = current_base;
+
+        if (size < 0)
+            size = abs(size);
 
         for (uint64_t i = current_base; i <= current_base + size; i++)
         {
@@ -178,27 +188,34 @@ int main(int argc, char **argv)
     MPI_Get_processor_name(processor_name, &name_len);
 
     int min_zeros = argc >= 2 ? atoi(argv[1]) : 1;
-    uint64_t starting = argc >= 3 ? std::stoul(argv[2]) : 0UL;
+    uint64_t starting = argc >= 3 ? std::stoull(argv[2]) : 0UL;
+    int64_t step = argc >= 4 ? std::stol(argv[3]) : 1000000L; // 1 million
 
-    printf("processor %s, rank %i, %i min zeros, %" PRIu64 " starting value\n", processor_name, world_rank, min_zeros, starting);
+    printf("processor %s, rank %i, %i min zeros, %" PRIu64 " starting value, %" PRId64 " step\n", processor_name, world_rank, min_zeros, starting, step);
 
     // create base window
     MPI_Win_create(&base_buffer, sizeof(uint64_t), sizeof(uint64_t), MPI_INFO_NULL, MPI_COMM_WORLD, &win_base);
+    MPI_Win_create(&size_buffer, sizeof(int64_t), sizeof(int64_t), MPI_INFO_NULL, MPI_COMM_WORLD, &win_size);
+
+    MPI_Win_fence(0, win_base); // wait for completion
+    MPI_Win_fence(0, win_size); // wait for completion
 
     if (world_rank == 0)
     {
 
         MPI_Put(&starting, 1, MPI_UINT64_T, 0, 0, 1, MPI_UINT64_T, win_base);
+        MPI_Put(&step, 1, MPI_INT64_T, 0, 0, 1, MPI_INT64_T, win_size);
     }
 
     MPI_Win_fence(0, win_base); // wait for completion
+    MPI_Win_fence(0, win_size); // wait for completion
 
     // create log window
     MPI_Win_create(NULL, 0, 1, MPI_INFO_NULL, MPI_COMM_WORLD, &win_log);
 
     std::vector<std::thread> threads;
 
-    std::thread work_thread = std::thread(task, min_zeros, world_rank);
+    std::thread work_thread = std::thread(task, min_zeros, world_rank, step);
 
     if (world_rank == 0)
     {
@@ -222,6 +239,7 @@ int main(int argc, char **argv)
     fprintf(stderr, "Final message '%s' ('%s') using nonce %" PRIu64 " with %i digits of leading zeros. Goodbye!\n", message.c_str(), hash.c_str(), max_nonce.load(), max.load());
 
     MPI_Win_free(&win_base);
+    MPI_Win_free(&win_size);
     MPI_Win_free(&win_log);
 
     MPI_Finalize(); // finish MPI environment

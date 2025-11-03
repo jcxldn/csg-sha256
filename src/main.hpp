@@ -12,7 +12,7 @@ void log(int thread_id, int zeros, uint64_t nonce);
 
 std::pair<int, uint64_t> test(uint64_t nonce);
 
-void task(int min_zeros, int thread_no);
+void task(int min_zeros, int thread_no, int64_t size);
 
 void dbg_task(int min_zeros, int machine_id);
 
