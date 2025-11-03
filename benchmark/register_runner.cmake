@@ -32,7 +32,7 @@ macro(register_runner suffix flags )
         ${RUNNER_SOURCE_FILES}
     )
 
-    target_link_libraries(${RUNNER_TARGET} PUBLIC ${RUNNER_TARGET}_flags PRIVATE sha256 ${RUNNER_TARGET}_benchmark)
+    target_link_libraries(${RUNNER_TARGET} PUBLIC ${RUNNER_TARGET}_flags PRIVATE sha256 ${RUNNER_TARGET}_benchmark -pthread)
     set_target_properties(${RUNNER_TARGET} PROPERTIES FOLDER "Benchmarking")
 
 

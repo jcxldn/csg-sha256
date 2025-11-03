@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.14...3.31 FATAL_ERROR) # FetchContent
 
 project(sha256_hash_challenge)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17) # google-benchmark (specified as we recreate it's static library target)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(USE_FOLDERS ON)  # Housekeeping for generators that support it
